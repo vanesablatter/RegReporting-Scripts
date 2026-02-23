@@ -1,0 +1,187 @@
+-- Download inputs for T13 and T13_2
+SELECT * FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+where report_dt = '2025-12-31'
+
+SELECT * FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+where report_dt = '2025-12-31'
+
+-- Consolidated checks for T13 and T13_2
+WITH params AS (
+    SELECT 
+        DATE '2025-12-31' AS report_dt
+)
+
+SELECT '01. T13 - Check number of rows' AS validation_check, COUNT(*) ::TEXT AS result
+    FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+    WHERE report_dt = (SELECT report_dt FROM params)
+
+UNION ALL
+
+SELECT '02. T13 - Check that all reportable datapoints are present' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT COUNT(*) 
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                ) 
+            =
+                (SELECT COUNT(*) 
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" IS NOT NULL
+                 AND "DATAPOINT" IN (13001,13002,13003,13004,13005,13032,13033,13034,13006,13007,13044,13045,13029,13030)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '03. T13 - Check that Pending Claims in T-1 + Claims Submitted in T = Claims Resolved in T + Claims Pending Resolution in T' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" IN (13001,13002)
+                ) 
+            =
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" IN (13003,13007)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '04. T13 - Check that Claims Resolved in T = Claims Resolved in T (split by result)' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" = 13003
+                ) 
+            =
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" IN (13004,13005,13032,13033,13034,13006)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '05. T13 - Check that Claims Resolved in T Favorable to the claimant = Claims Resolved in T Rectified + Not Rectified' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" = 13005
+                ) 
+            =
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" IN (13029,13030)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '06. T13_2 - Check number of rows' AS validation_check, COUNT(*) ::TEXT AS result
+    FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+    WHERE report_dt = (SELECT report_dt FROM params)
+
+UNION ALL
+
+SELECT '07. T13_2 - Check that total number of Claims Resolved matched the reported value in T13' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" = 13005
+                ) 
+            =
+                (SELECT SUM ("VALUE")
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "DATAPOINT" IN (13029,13030)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '08. T13_2 - Check that Type of Instrument matches the values from Annex 5 from the mapping' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT count (*)
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                ) 
+            =
+                (SELECT count (*)
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "INSTRUMENT_TYPE" IN (1,2,3,4,5)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '09. T13_2 - Check that Investment Service matches values 1 or 4 from Annex 6 from the mapping' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT count (*)
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                ) 
+            =
+                (SELECT count (*)
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "INVESTMENT_SERVICE" IN (1,4)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
+
+UNION ALL
+
+SELECT '10. T13_2 - Check that Reason for Claim matches the values from Annex 7 from the mapping' AS validation_check,
+       (CASE 
+            WHEN
+                (SELECT count (*)
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                ) 
+            =
+                (SELECT count (*)
+                 FROM TEAMS_PRD.REGULATORY_REPORTING_MART.MRT_CURR__REGULATORY_REPORTING__ES_CNMV_T13_2
+                 WHERE report_dt = (SELECT report_dt FROM params)
+                 AND "INVESTMENT_SERVICE" IN (1,2,3,4,5)
+                )
+            THEN 'TRUE'
+            ELSE 'FALSE'
+        END
+    )::TEXT AS result
